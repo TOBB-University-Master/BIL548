@@ -1,44 +1,35 @@
-import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
 import java.io.*;
 import java.net.Socket;
-import java.security.KeyFactory;
-import java.security.PublicKey;
 import java.security.Security;
-import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 public class Client {
-
     private static String response;
     private static Socket socket;
     private static BufferedReader userInput;
     private static PrintWriter out;
     private static BufferedReader in;
     public static void main(String[] args){
-        String serverAddress = "localhost";
+        String serverAddress = "127.0.0.1";
         int serverPort = 12345;
+        userInput = new BufferedReader(new InputStreamReader(System.in));
 
         try {
-            socket = new Socket(serverAddress, serverPort);
-            Security.addProvider(new BouncyCastleProvider());
-
+            // Connecting to server ...
+            connectToServer(serverAddress, serverPort);
             System.out.println("Sunucuya bağlanıldı: " + serverAddress + ":" + serverPort);
 
-            userInput = new BufferedReader(new InputStreamReader(System.in));
-            out = new PrintWriter(socket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            // SSL/TLS handshake
+            sendMessage("hello::new");
 
             while (true) {
-                System.out.print("Komut girin (connect, send, exit): ");
+                System.out.print("Komut girin (login, exit): ");
                 String command = userInput.readLine();
 
-                if (command.equals("connect")) {
-                    connectToServer();
-                } else if (command.equals("send")) {
-                    sendMessage(null);
-                } else if (command.equals("login")) {
-                    String encMessage = encryptMessageStr(response,"kemal");
+                if (command.equals("login")) {
+                    String encMessage = EncryptionHandler.encryptAES("login::kemal:12345");
                     sendMessage(encMessage);
                 } else if (command.equals("exit")) {
                     System.out.println("Programdan çıkılıyor...");
@@ -59,63 +50,75 @@ public class Client {
     }
 
     /**
-     * Sunucu tarafından gelen public key ile String message Encrypt edilir
-     */
-    private static String encryptMessageStr(String serverPublicKeyEncoded , String message) throws Exception{
-        byte[] serverPublicKeyBytes = Base64.getDecoder().decode(serverPublicKeyEncoded);
-        X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(serverPublicKeyBytes);
-        KeyFactory keyFactory = KeyFactory.getInstance("EC");
-        PublicKey serverPublicKey = keyFactory.generatePublic(x509KeySpec);
-
-        // Mesajı şifrele
-        byte[] encryptedMessage = encryptMessage(message, serverPublicKey);
-
-        // Şifreli mesajı Base64 formatına dönüştürerek göster
-        String encryptedMessageBase64 = Base64.getEncoder().encodeToString(encryptedMessage);
-        return encryptedMessageBase64;
-    }
-
-    private static byte[] encryptMessage(String message, PublicKey publicKey) throws Exception {
-        Cipher cipher = Cipher.getInstance("ECIES");
-        cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-        return cipher.doFinal(message.getBytes());
-    }
-
-
-    /**
+     * Sunucuya bağlanmayı sağlar
      *
      * @throws IOException
      */
-    private static void connectToServer() throws IOException {
-        if (socket.isConnected()) {
+    private static void connectToServer(String serverAddress, int serverPort) throws IOException {
+        if (socket!=null && socket.isConnected()) {
             System.out.println("Zaten sunucuya bağlısınız.");
             return;
         }
-
-        System.out.print("Sunucuya bağlanmak için IP adresi/alan adı girin: ");
-        String serverAddress = userInput.readLine();
-        System.out.print("Sunucu port numarası girin: ");
-        int serverPort = Integer.parseInt(userInput.readLine());
-
         socket = new Socket(serverAddress, serverPort);
-        System.out.println("Sunucuya bağlanıldı: " + serverAddress + ":" + serverPort);
+        Security.addProvider(new BouncyCastleProvider());
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(socket.getOutputStream(), true);
     }
 
+
+    /**
+     * Sunucuya mesaj göndermek için kullanılır ve gelen mesajlarla ilgilenir
+     *
+     * @param message
+     * @throws IOException
+     */
     private static void sendMessage(String message) throws IOException {
         if (!socket.isConnected()) {
             System.out.println("Önce sunucuya bağlanmalısınız.");
             return;
         }
 
-        System.out.print("Göndermek istediğiniz mesajı girin: ");
-        message = message==null || message.length()==0 ? userInput.readLine():message;
+        if(message==null || message.length()==0){
+            System.out.print("Göndermek istediğiniz mesajı girin: ");
+            message = userInput.readLine();
+        }
+
+        System.out.println("\n********** TO SERVER **********");
+        System.out.println(message);
         out.println(message);
 
         response = in.readLine();
-        response = response.contains(":") ? response.split(":")[1].trim() : response;
-        System.out.println("Sunucudan gelen cevap: " + response);
+        System.out.println("\n********** FROM SERVER **********");
+        System.out.println(response);
+
+        // sadece PK: varsa çalışır
+        createSessionKey(response);
+    }
+
+    /**
+     * Sunucudan gelen mesaj PK::MFkwEwY... formatında ise session key olarak AES anahtar oluştur
+     *
+     * @param serverMsg
+     */
+    private static void createSessionKey(String serverMsg){
+        System.out.println("\n********** CLIENT INTERNAL OPS **********");
+        if(serverMsg.contains("::") && serverMsg.split("::").length==2){
+            String serverRequestCommand = serverMsg.split("::")[0];
+            String serverRequestData = serverMsg.split("::")[1];
+           if(serverRequestCommand.trim().equalsIgnoreCase("PK")){
+               System.out.println("Generating session key AES... ");
+               try{
+                   EncryptionHandler.generateAESKey(128);
+                   String AESSessionKeyBase64 = Base64.getEncoder().encodeToString(EncryptionHandler.sessionKey.getEncoded());
+                   System.out.println("SessionKey::" + AESSessionKeyBase64);
+                   String encryptedSessionKey = EncryptionHandler.encryptECDH(serverRequestData , AESSessionKeyBase64);
+                   sendMessage("session::"+encryptedSessionKey);
+               }catch (Exception e){
+                    e.printStackTrace();
+               }
+
+           }
+        }
     }
 
 }
