@@ -1,31 +1,42 @@
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import javax.crypto.Cipher;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.KeyPair;
-import java.security.KeyPairGenerator;
 import java.security.Security;
-import java.security.spec.ECGenParameterSpec;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
 
 public class Server {
 
+    public static HashMap<String, User> userMap = new HashMap<>();
     public static KeyPair keyPair;
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
+    public static List<ClientHandler> clients = new ArrayList<>();
 
     public static void main(String[] args){
         int port = 12345;
+
+        User user1 = new User("1", "kemal", "827ccb0eea8a706c4c34a16891f84e7b");    // password 12345
+        User user2 = new User("2", "sami", "827ccb0eea8a706c4c34a16891f84e7b");
+        User user3 = new User("3", "karaca", "827ccb0eea8a706c4c34a16891f84e7b");
+
+        userMap.put(user1.getUsername(), user1);
+        userMap.put(user2.getUsername(), user2);
+        userMap.put(user3.getUsername(), user3);
+
         try {
             Security.addProvider(new BouncyCastleProvider());
             ServerSocket serverSocket = new ServerSocket(port);
             System.out.println("Sunucu başlatıldı :: port " + port + " dinleniyor...");
 
             // Long-term DH-EC anahtar ikilisi olusturulur
-            keyPair = createKeyPair();
+            keyPair = EncryptionHandler.generateECDHKeyPair();
             System.out.println("Sunucu sertifikası oluşturuldu :: ");
 
             publicKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
@@ -41,6 +52,7 @@ public class Server {
 
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
                 Thread thread = new Thread(clientHandler);
+                clients.add(clientHandler);
                 thread.start();
             }
         } catch (IOException e) {
@@ -48,26 +60,10 @@ public class Server {
         }
     }
 
-    public static KeyPair createKeyPair() {
-        try{
-            // Generate EC key
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
-            ECGenParameterSpec parameterSpec = new ECGenParameterSpec("secp256r1");
-            keyPairGenerator.initialize(parameterSpec);
-            keyPair = keyPairGenerator.generateKeyPair();
-
-            return keyPair;
-        }catch (Exception e){
-            return null;
+    public static void broadcast(String message) {
+        for (ClientHandler client : clients) {
+            client.sendMessage(message);
         }
-    }
-
-    public static String decryptMessage(String encryptedMessageBase64) throws Exception {
-        byte[] encryptedMessage = Base64.getDecoder().decode(encryptedMessageBase64);
-        Cipher cipher = Cipher.getInstance("ECIES");
-        cipher.init(Cipher.DECRYPT_MODE, keyPair.getPrivate());
-        byte[] decryptedBytes = cipher.doFinal(encryptedMessage);
-        return new String(decryptedBytes);
     }
 
 }
