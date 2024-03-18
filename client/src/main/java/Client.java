@@ -1,45 +1,71 @@
 import javax.crypto.SecretKey;
 import java.io.*;
 import java.net.Socket;
+import java.security.KeyPair;
 import java.security.Security;
 import java.util.Base64;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.json.JSONObject;
 
 public class Client {
+
+    private static String serverName="127.0.0.1";;
+    private static int serverPort=12345;
+    private static String userId = null;
+    public static KeyPair keyPair;
+    public static String publicKeyEncoded;
+    public static String privateKeyEncoded;
     private static String response;
     private static Socket socket;
     private static BufferedReader userInput;
     private static PrintWriter out;
     private static BufferedReader in;
-    private static ClientConnectionState clientConnectionState;
+    public static ClientConnectionState clientConnectionState;
     public static void main(String[] args){
-        String serverAddress = "127.0.0.1";
-        int serverPort = 12345;
+        Client client = new Client();
         userInput = new BufferedReader(new InputStreamReader(System.in));
         clientConnectionState = ClientConnectionState.UNSECURE;
-        try {
-            // Connecting to server ...
-            connectToServer(serverAddress, serverPort);
-            System.out.println("Sunucuya bağlanıldı: " + serverAddress + ":" + serverPort);
 
-            // SSL/TLS handshake
-            sendMessage("hello::new");
+        // Long-term DH-EC anahtar ikilisi olusturulur
+        keyPair = EncryptionHandler.generateECDHKeyPair();
+        System.out.println("Sunucu sertifikası oluşturuldu :: ");
+
+        publicKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        System.out.println("Public key[encoded] :: " + publicKeyEncoded);
+
+        privateKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
+        System.out.println("Private key[encoded] :: " + privateKeyEncoded);
+
+        try {
+            // Connection Protocol
+            connectionProtocol();
+
+/*
+            // Sunucudan gelen mesajları işleyen thread
+            MessageReceiver messageReceiver = new MessageReceiver(in);
+            Thread messageThread = new Thread(messageReceiver);
+            messageThread.start();
+
+            // Kullanıcı girdisini işleyen thread
+            UserInputHandler userInputHandler = new UserInputHandler(userInput, out);
+            Thread userInputThread = new Thread(userInputHandler);
+            userInputThread.start();
+
+            messageThread.join();
+            userInputThread.join();
+ */
 
             while (true) {
-                System.out.print("Komut girin (user_list): ");
+                System.out.print("Komut girin (login , user_list): ");
                 String command = userInput.readLine();
 
                 if (command.equals("login")) {
-                    /**
-                     * Simetrik anahtar ile kullanıcı login olur
-                     */
-                    String encMessage = EncryptionHandler.encryptAES("login::kemal:12345");
-                    sendMessage(encMessage);
+                    loginProtocol();
 
                 // Bu servis ile kullanıcı listesi alınıyor
                 } else if (command.equals("user_list")) {
                     String encMessage = EncryptionHandler.encryptAES("user_list::new");
-                    sendMessage(encMessage);
+                    sendMessageToServer(encMessage);
 
                 } else if (command.equals("exit")) {
                     System.out.println("Programdan çıkılıyor...");
@@ -60,12 +86,69 @@ public class Client {
     }
 
     /**
+     * Bu protokol ile Client-Server güvenli bağlantı için anahtar değişimi sağlanır
+     */
+    private static void connectionProtocol() throws Exception{
+        // Connecting to server ...
+        connectToServer(serverName, serverPort);
+        System.out.println("\n********** CONNECTION PROCOTOL STARTED **********");
+        System.out.println("Sunucuya bağlanıldı: " + serverName + ":" + serverPort);
+
+        // SSL/TLS handshake start
+        sendMessageToServer("hello::new");
+
+        // SSL/TLS handshake session key selection
+        if(clientConnectionState==ClientConnectionState.SSL_HANDSHAKE){
+            System.out.println("Generating session key AES... ");
+            EncryptionHandler.generateAESKey(128);
+            String AESSessionKeyBase64 = Base64.getEncoder().encodeToString(EncryptionHandler.sessionKey.getEncoded());
+            System.out.println("SessionKey::" + AESSessionKeyBase64);
+            String encryptedSessionKey = EncryptionHandler.encryptECDH(EncryptionHandler.serverEncodedPublicKey , AESSessionKeyBase64);
+            sendMessageToServer(encryptedSessionKey);
+        } else {
+            throw new Exception("SSL_HANDSHAKE_ERROR!!!");
+        }
+
+        // Close connection after session key
+        closeConnection();
+        System.out.println("\n********** CONNECTION PROCOTOL FINISHED **********");
+    }
+
+
+    /**
+     * Bu protokol ile Client-Server güvenli bağlantı için anahtar değişimi sağlanır
+     */
+    private static void loginProtocol() throws Exception{
+        connectToServer(serverName, serverPort);
+        System.out.println("\n********** LOGIN PROCOTOL STARTED **********");
+
+        /**
+         * Simetrik anahtar ile kullanıcı login olur
+         */
+        JSONObject encJsonData = new JSONObject();
+        encJsonData.put("username", "kemal");
+        encJsonData.put("password", "12345");
+        encJsonData.put("command", "login");
+
+        String encMessage = EncryptionHandler.encryptAES(encJsonData.toString());
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("from", userId);
+        jsonObject.put("data", encMessage);
+        sendMessageToServer(jsonObject.toString());
+
+        // Close connection after login
+        closeConnection();
+        System.out.println("\n********** LOGIN PROCOTOL FINISHED **********");
+    }
+
+
+    /**
      * Sunucuya bağlanmayı sağlar
      *
      * @throws IOException
      */
     private static void connectToServer(String serverAddress, int serverPort) throws IOException {
-        if (socket!=null && socket.isConnected()) {
+        if (socket!=null && socket.isConnected() && !socket.isClosed()) {
             System.out.println("Zaten sunucuya bağlısınız.");
             return;
         }
@@ -75,6 +158,16 @@ public class Client {
         out = new PrintWriter(socket.getOutputStream(), true);
     }
 
+    private static void closeConnection() {
+        try {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
 
     /**
      * Sunucuya mesaj göndermek için kullanılır ve gelen mesajlarla ilgilenir
@@ -82,9 +175,9 @@ public class Client {
      * @param message
      * @throws IOException
      */
-    private static void sendMessage(String message) throws IOException,Exception {
+    public static void sendMessageToServer(String message) throws Exception {
         if (!socket.isConnected()) {
-            System.out.println("Önce sunucuya bağlanmalısınız.");
+            System.out.println("ERROR:NOT_CONNECTED");
             return;
         }
 
@@ -111,19 +204,29 @@ public class Client {
      * @param message
      * @return
      */
-    public static String handleMessage(String message) throws Exception{
+    public static void handleMessage(String message) throws Exception{
         String command = null;
         String[] response;
         switch (clientConnectionState) {
 
             // sadece PK: varsa çalışır
             case UNSECURE:
-                createSessionKey(message);
+                // createSessionKey(message);
+                System.out.println("\n********** CLIENT INTERNAL OPS **********");
+                if(message.contains("::") && message.split("::").length==2){
+                    String serverRequestCommand = message.split("::")[0];
+                    if(serverRequestCommand.trim().equalsIgnoreCase("PK")){
+                        EncryptionHandler.serverEncodedPublicKey = message.split("::")[1];
+                        clientConnectionState = ClientConnectionState.SSL_HANDSHAKE;
+                    }
+                }
                 break;
 
             case SSL_HANDSHAKE:
-                if(message.equalsIgnoreCase("hello::done")){
+                response = message.split("::");
+                if(response.length==3 && response[0].equalsIgnoreCase("hello") && response[1].equalsIgnoreCase("done")){
                     clientConnectionState = ClientConnectionState.SESSION_KEY;
+                    userId = response[2];
                 }
                 break;
 
@@ -132,7 +235,6 @@ public class Client {
                 System.out.println(plainText);
                 break;
         }
-        return "";
     }
 
     /**
@@ -153,7 +255,7 @@ public class Client {
                    System.out.println("SessionKey::" + AESSessionKeyBase64);
                    String encryptedSessionKey = EncryptionHandler.encryptECDH(serverRequestData , AESSessionKeyBase64);
                    clientConnectionState = ClientConnectionState.SSL_HANDSHAKE;
-                   sendMessage(encryptedSessionKey);
+                   //sendMessageToServer(encryptedSessionKey);
                }catch (Exception e){
                     e.printStackTrace();
                }

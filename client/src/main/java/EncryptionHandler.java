@@ -1,15 +1,15 @@
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 public class EncryptionHandler {
 
+    public static String serverEncodedPublicKey;
     public static SecretKey sessionKey;
-
+    public static KeyPair keyPair;
 
     /**
      *  Generate AES key for session
@@ -60,6 +60,20 @@ public class EncryptionHandler {
         // Encode to base64
         String encryptedMessageBase64 = Base64.getEncoder().encodeToString(encryptedMessage);
         return encryptedMessageBase64;
+    }
+
+    public static KeyPair generateECDHKeyPair() {
+        try{
+            // Generate EC key
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC");
+            ECGenParameterSpec parameterSpec = new ECGenParameterSpec("secp256r1");
+            keyPairGenerator.initialize(parameterSpec);
+            keyPair = keyPairGenerator.generateKeyPair();
+
+            return keyPair;
+        }catch (Exception e){
+            return null;
+        }
     }
 
 }

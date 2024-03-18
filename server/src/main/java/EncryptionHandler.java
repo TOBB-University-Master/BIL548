@@ -9,8 +9,6 @@ import java.util.Base64;
 
 public class EncryptionHandler {
 
-    public SecretKey sessionKey;
-
     public static KeyPair keyPair;
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
@@ -18,22 +16,23 @@ public class EncryptionHandler {
     /**
      *  Generate AES key for session
      */
-    public void generateAESKey(int keySize) throws NoSuchAlgorithmException {
+    public SecretKey generateAESKey(int keySize) throws NoSuchAlgorithmException {
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(keySize);
-        sessionKey = keyGen.generateKey();
+        return keyGen.generateKey();
     }
 
-    public void setAESKey(String secretKeyString){
+    public SecretKey getAESKey(String secretKeyString){
         byte[] decodedKey = Base64.getDecoder().decode(secretKeyString);
-        sessionKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+        SecretKey sessionKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+        return sessionKey;
     }
 
 
     /**
      *  Metin dizesini AES kullanarak şifrele
      */
-    public String encryptAES(String strToEncrypt) throws Exception {
+    public String encryptAES(SecretKey sessionKey, String strToEncrypt) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, sessionKey);
         byte[] encryptedBytes = cipher.doFinal(strToEncrypt.getBytes());
@@ -44,7 +43,7 @@ public class EncryptionHandler {
     /**
      *  Şifrelenmiş metni AES kullanarak çöz
      */
-    public String decryptAES(String strToDecrypt) throws Exception {
+    public String decryptAES(SecretKey sessionKey, String strToDecrypt) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, sessionKey);
         byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(strToDecrypt));

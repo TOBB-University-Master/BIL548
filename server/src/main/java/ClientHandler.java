@@ -1,3 +1,6 @@
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -6,21 +9,20 @@ import java.net.Socket;
 
 public class ClientHandler implements Runnable {
 
-    public String username;
-    public int id;
+    // Client
+    public User user;
     private Socket clientSocket;
     private PrintWriter out;
     private BufferedReader in;
-    private ClientConnectionState clientConnectionState;
 
     private EncryptionHandler encryptionHandler;
 
     public ClientHandler(Socket clientSocket) {
-        this.id = (int)(Math.random() * (100000) + 1);
-        this.username = "user_" + id ;
+        this.user = new User();
+        this.user.setId(""+ ((int)(Math.random() * (100000) + 1)));
+        this.user.setUsername("user_" + this.user.getId() );
+        this.user.setClientConnectionState(ClientConnectionState.UNSECURE);
         this.clientSocket = clientSocket;
-        // Initial state for Client
-        this.clientConnectionState = ClientConnectionState.UNSECURE;
         this.encryptionHandler = new EncryptionHandler();
     }
 
@@ -69,7 +71,26 @@ public class ClientHandler implements Runnable {
         String command = null;
         String[] request;
 
-        switch (clientConnectionState) {
+        try {
+            JSONObject jsonObject = new JSONObject(message);
+            String from = jsonObject.getString("from");
+
+            // TODO: Kullanıcı listede ise anahtarı alınarak login işlemine başlanır
+            if (from != null) {
+                for(User onlineUser :Server.onlineUserList){
+                    if(onlineUser.getUsername().equalsIgnoreCase(from)){
+                        user = onlineUser;
+                        message = jsonObject.getString("data");
+                        break;
+                    }
+                }
+            }
+        } catch (JSONException e){
+            System.out.println("SİLİNECEK: STR TO JSON OBJECT DEVAM ET...");
+        }
+
+
+        switch (user.getClientConnectionState()) {
 
             // Public key send to client
             case UNSECURE:
@@ -78,45 +99,43 @@ public class ClientHandler implements Runnable {
                     command = request[0];
                     if(command.equalsIgnoreCase("hello")){
                         response = "PK::" + Server.publicKeyEncoded;
-                        clientConnectionState = ClientConnectionState.SSL_HANDSHAKE_START;
+                        user.setClientConnectionState(ClientConnectionState.SSL_HANDSHAKE_START);
                     }
                 }
                 break;
 
             case SSL_HANDSHAKE_START:
-                //String decMessage = Server.decryptMessage(message);
                 String sessionKey = EncryptionHandler.decryptECDH(message);
-                encryptionHandler.setAESKey(sessionKey);
                 System.out.println("Session Key : " + sessionKey);
-                clientConnectionState = ClientConnectionState.SESSION_KEY;
-                response = "hello::done";
+                user.setClientConnectionState(ClientConnectionState.SESSION_KEY);
+                user.setSessionKey(encryptionHandler.getAESKey(sessionKey));
+                Server.onlineUserList.add(user);
+                response = "hello::done::"+user.getUsername();
                 break;
 
             // All messages will be encrypted
             case SESSION_KEY:
-                String plainText = encryptionHandler.decryptAES(message);
+                String plainText = encryptionHandler.decryptAES(user.getSessionKey() ,message);
                 System.out.println("PLAIN TEXT : " + plainText);
-                request = plainText.split("::");
-                if(request!=null && request.length>0){
-                    switch (request[0]){
+                JSONObject jsonObject = getJsonObject(plainText);
+                if(jsonObject!=null){
+                    switch (jsonObject.getString("command")){
 
                         case "login":
-                            if(request.length==3){
-                                String username = request[1];
-                                String password = request[2];
+                            String username = jsonObject.getString("username");
+                            String password = jsonObject.getString("password");
 
-                                User user = Server.userMap.get(username);
-                                if(user==null){
-                                    response = "RESPONSE::USER_NOT_FOUND";
-                                } else if(user.getPassword()!=password){
-                                    response = "RESPONSE::USER_PASSWORD_WRONG";
-                                } else {
-                                    // TODO: Burada kullanıcı için authentication sağlanacak
-                                    // JWT gibi kullanıcı adı ve imzası imzalanacak
-                                    System.out.println();
-                                }
+                            User userInDB = Server.userDatabase.get(username);
+                            if(userInDB==null){
+                                response = "RESPONSE::USER_NOT_FOUND";
+                            } else if(!userInDB.getPassword().equalsIgnoreCase(password)){
+                                response = "RESPONSE::USER_PASSWORD_WRONG";
                             } else {
-                                response = "RESPONSE::PARAMETER_ERROR";
+                                user.setId(userInDB.getId());
+                                user.setUsername(userInDB.getUsername());
+                                user.setRole(UserRole.USER);
+                                // TODO: Aynı hesapla birden fazla giriş için username yerine tekil id'lerle tutulabilir...
+                                response = "login::done";
                             }
                             break;
 
@@ -125,13 +144,26 @@ public class ClientHandler implements Runnable {
                             System.out.println(response);
                             break;
 
+                        case "chat":
+                            /*
+                            if(request.length==4){
+                                String userPK = request[2];
+                                String username = request[3];
+                                response = "chat::new::" + userPK + "::" + user.getUsername();
+
+                            } else {
+                                response = "RESPONSE::PARAMETER_ERROR";
+                            }
+                             */
+                            break;
+
                         default:
                             response = "RESPONSE: REQUEST NOT FOUND ERROR";
                             break;
                     }
                 }
 
-                response = encryptionHandler.encryptAES(response);
+                response = encryptionHandler.encryptAES(user.getSessionKey() ,response);
                 System.out.println(response);
                 break;
 
@@ -147,10 +179,19 @@ public class ClientHandler implements Runnable {
     public String getUserList(){
         String userList = "";
         for(ClientHandler clientHandler : Server.clients){
-            if(!clientHandler.username.equalsIgnoreCase(username)){
-                userList += clientHandler.username + ",";
+            if(!clientHandler.user.getUsername().equalsIgnoreCase(user.getUsername())){
+                userList += clientHandler.user.getUsername() + ",";
             }
         }
         return userList;
+    }
+
+    public JSONObject getJsonObject(String jsonStr) {
+        JSONObject jsonObject = null;
+        try {
+            jsonObject = new JSONObject(jsonStr);
+        } catch (JSONException e){}
+
+        return jsonObject;
     }
 }

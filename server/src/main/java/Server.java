@@ -13,7 +13,9 @@ import java.util.List;
 
 public class Server {
 
-    public static HashMap<String, User> userMap = new HashMap<>();
+    public static HashMap<String, User> userDatabase = new HashMap<>();
+
+    public static List<User> onlineUserList = new ArrayList<>();
     public static KeyPair keyPair;
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
@@ -22,13 +24,13 @@ public class Server {
     public static void main(String[] args){
         int port = 12345;
 
-        User user1 = new User("1", "kemal", "827ccb0eea8a706c4c34a16891f84e7b");    // password 12345
-        User user2 = new User("2", "sami", "827ccb0eea8a706c4c34a16891f84e7b");
-        User user3 = new User("3", "karaca", "827ccb0eea8a706c4c34a16891f84e7b");
+        User user1 = new User("1", "kemal", "12345");    // password 12345
+        User user2 = new User("2", "sami", "12345" );
+        User user3 = new User("3", "karaca", "12345");
 
-        userMap.put(user1.getUsername(), user1);
-        userMap.put(user2.getUsername(), user2);
-        userMap.put(user3.getUsername(), user3);
+        userDatabase.put(user1.getUsername(), user1);
+        userDatabase.put(user2.getUsername(), user2);
+        userDatabase.put(user3.getUsername(), user3);
 
         try {
             Security.addProvider(new BouncyCastleProvider());
