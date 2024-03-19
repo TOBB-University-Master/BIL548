@@ -16,11 +16,12 @@ public class EncryptionHandler {
     /**
      *  Generate AES key for session
      */
-    public SecretKey generateAESKey(int keySize) throws NoSuchAlgorithmException {
+    public static SecretKey generateAESKey(int keySize) throws NoSuchAlgorithmException {
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(keySize);
         return keyGen.generateKey();
     }
+
 
     public SecretKey getAESKey(String secretKeyString){
         byte[] decodedKey = Base64.getDecoder().decode(secretKeyString);
@@ -32,7 +33,7 @@ public class EncryptionHandler {
     /**
      *  Metin dizesini AES kullanarak şifrele
      */
-    public String encryptAES(SecretKey sessionKey, String strToEncrypt) throws Exception {
+    public static String encryptAES(SecretKey sessionKey, String strToEncrypt) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, sessionKey);
         byte[] encryptedBytes = cipher.doFinal(strToEncrypt.getBytes());

@@ -1,11 +1,14 @@
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.crypto.SecretKey;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.Base64;
+import java.util.List;
 
 public class ClientHandler implements Runnable {
 
@@ -21,9 +24,62 @@ public class ClientHandler implements Runnable {
         this.user = new User();
         this.user.setId(""+ ((int)(Math.random() * (100000) + 1)));
         this.user.setUsername("user_" + this.user.getId() );
+        this.user.setSession(user.getUsername());
         this.user.setClientConnectionState(ClientConnectionState.UNSECURE);
         this.clientSocket = clientSocket;
         this.encryptionHandler = new EncryptionHandler();
+    }
+
+    /**
+     * TODO: Burada kalındı...
+     *
+     * 1- ClientA, ClientB ile sohbet açmak ister
+     * 2- Sunucu AES simetrik anahtar oluşturur ve her iki Client'a yollar (chatSessionKey)
+     * 3- ClientA ve ClientB için chat state'ine geçilir
+     * 4- Chat state'nde ClientA'dan giden mesajlar ClientB'ye chatSessionKey ile şifrelenerek yollanır
+     * 5- Sunucu gelen mesajları direk diğer Client'a yollar
+     * 6- Chat state'nde Client'a gelen mesajlar chatSessionKey ile deşifre edilir
+     * 7- Chat state'inden çıkmak için :exit komutu kullanılabilir
+     *
+     */
+    private void secureChatProtocol(String toUserName) throws Exception{
+        // Her iki kullanıcı bulunur
+        // Kullanıcılar için ortak anahtar oluşturulur
+        String response="ERROR";
+        User toUser=null;
+        for( User tuser : Server.onlineUserList.values() ){
+            if(tuser.getUsername().equalsIgnoreCase(toUserName)){
+                toUser = tuser;
+            }
+        }
+
+        // Chat room oluşturulur
+        if(toUser!=null){
+            ChatRoom chatRoom = new ChatRoom();
+            chatRoom.getUsernameList().add(toUser.getUsername());
+
+            SecretKey secretKey =  EncryptionHandler.generateAESKey(128);
+            String AESChatSessionKeyBase64 = Base64.getEncoder().encodeToString(secretKey.getEncoded());
+            chatRoom.setSessionKey(secretKey);
+
+            JSONObject encJsonData = new JSONObject();
+            encJsonData.put("chatSessionKey", AESChatSessionKeyBase64);
+            encJsonData.put("command", "chatSessionKey");
+
+            // Send chatSessionKey to user1
+            encJsonData.put("username", user.getUsername() );
+            Server.broadcastTo(toUser.getUsername(), encryptionHandler.encryptAES(toUser.getSessionKey(), encJsonData.toString()));
+
+            // Send chatSessionKey to user2
+            encJsonData.put("username", toUser.getUsername() );
+            Server.broadcastTo(user.getUsername(), encryptionHandler.encryptAES(user.getSessionKey(), encJsonData.toString()));
+
+        } else {
+            response = "USER NOT FOUND";
+        }
+
+        response = encryptionHandler.encryptAES(user.getSessionKey() ,response);
+        out.println(response);
     }
 
     /**
@@ -40,6 +96,7 @@ public class ClientHandler implements Runnable {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             String line;
             while ((line = in.readLine()) != null) {
+                List<ClientHandler> clientSocketList = Server.clientSocketList;
                 handleMessage(line);
             }
 
@@ -67,7 +124,7 @@ public class ClientHandler implements Runnable {
     private void handleMessage(String message) throws Exception{
         System.out.println("\nCLIENT REQUEST MSG: " + message);
 
-        String response = "RESPONSE:REQUEST FORMAT MUST {command::data}";
+        String response = "RESPONSE:REQUEST FORMAT MUST command::data";
         String command = null;
         String[] request;
 
@@ -75,18 +132,15 @@ public class ClientHandler implements Runnable {
             JSONObject jsonObject = new JSONObject(message);
             String from = jsonObject.getString("from");
 
-            // TODO: Kullanıcı listede ise anahtarı alınarak login işlemine başlanır
             if (from != null) {
-                for(User onlineUser :Server.onlineUserList){
-                    if(onlineUser.getUsername().equalsIgnoreCase(from)){
-                        user = onlineUser;
-                        message = jsonObject.getString("data");
-                        break;
-                    }
+                User onlineUser = Server.onlineUserList.get(from);
+                if(onlineUser!=null) {
+                    user = onlineUser;
+                    message = jsonObject.getString("data");
                 }
             }
         } catch (JSONException e){
-            System.out.println("SİLİNECEK: STR TO JSON OBJECT DEVAM ET...");
+            // Nothing ...
         }
 
 
@@ -109,7 +163,9 @@ public class ClientHandler implements Runnable {
                 System.out.println("Session Key : " + sessionKey);
                 user.setClientConnectionState(ClientConnectionState.SESSION_KEY);
                 user.setSessionKey(encryptionHandler.getAESKey(sessionKey));
-                Server.onlineUserList.add(user);
+                if(Server.onlineUserList.get(user.getSession())==null){
+                    Server.onlineUserList.putIfAbsent( user.getSession(), user);
+                }
                 response = "hello::done::"+user.getUsername();
                 break;
 
@@ -145,16 +201,27 @@ public class ClientHandler implements Runnable {
                             break;
 
                         case "chat":
-                            /*
-                            if(request.length==4){
-                                String userPK = request[2];
-                                String username = request[3];
-                                response = "chat::new::" + userPK + "::" + user.getUsername();
+                            secureChatProtocol(jsonObject.getString("username"));
+                            break;
 
-                            } else {
-                                response = "RESPONSE::PARAMETER_ERROR";
-                            }
-                             */
+                        case "sendMessageTo":
+                            String to = jsonObject.getString("to");
+                            String data = jsonObject.getString("data");
+
+                            // TODO: Neden istenilen clientHandler'a gitmiyor ?
+                            System.out.println(jsonObject.getString("data"));
+                            Server.broadcastToEnc(to,plainText);
+                            //Server.broadcastEnc(data);
+
+                            break;
+
+                        /**
+                         * TODO: Silinecek
+                         *
+                         * Plain text göndermek için eklendi...
+                         */
+                        case "test":
+                            Server.broadcastToEnc("sami","testasdasds");
                             break;
 
                         default:
@@ -178,9 +245,10 @@ public class ClientHandler implements Runnable {
 
     public String getUserList(){
         String userList = "";
-        for(ClientHandler clientHandler : Server.clients){
-            if(!clientHandler.user.getUsername().equalsIgnoreCase(user.getUsername())){
-                userList += clientHandler.user.getUsername() + ",";
+        for(User onlineUserList : Server.onlineUserList.values()){
+            if(!onlineUserList.getUsername().equalsIgnoreCase(user.getUsername()) &&
+                    onlineUserList.getRole()==UserRole.USER){
+                userList += onlineUserList.getUsername() + ",";
             }
         }
         return userList;

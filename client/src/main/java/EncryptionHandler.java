@@ -1,6 +1,7 @@
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
 import java.security.spec.X509EncodedKeySpec;
@@ -8,23 +9,28 @@ import java.util.Base64;
 public class EncryptionHandler {
 
     public static String serverEncodedPublicKey;
-    public static SecretKey sessionKey;
     public static KeyPair keyPair;
 
     /**
      *  Generate AES key for session
      */
-    public static void generateAESKey(int keySize) throws NoSuchAlgorithmException {
+    public static SecretKey generateAESKey(int keySize) throws NoSuchAlgorithmException {
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(keySize);
-        sessionKey = keyGen.generateKey();
+        return keyGen.generateKey();
+    }
+
+    public static SecretKey getAESKey(String secretKeyString){
+        byte[] decodedKey = Base64.getDecoder().decode(secretKeyString);
+        SecretKey sessionKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+        return sessionKey;
     }
 
 
     /**
      *  Metin dizesini AES kullanarak şifrele
      */
-    public static String encryptAES(String strToEncrypt) throws Exception {
+    public static String encryptAES(SecretKey sessionKey, String strToEncrypt) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.ENCRYPT_MODE, sessionKey);
         byte[] encryptedBytes = cipher.doFinal(strToEncrypt.getBytes());
@@ -35,7 +41,7 @@ public class EncryptionHandler {
     /**
      *  Şifrelenmiş metni AES kullanarak çöz
      */
-    public static String decryptAES(String strToDecrypt) throws Exception {
+    public static String decryptAES(SecretKey sessionKey, String strToDecrypt) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, sessionKey);
         byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(strToDecrypt));

@@ -13,6 +13,7 @@ public class User {
     private String username;
     private String password;
     private UserRole role = UserRole.ANONYMOUS;
+    private String session = null;
     private SecretKey sessionKey=null;
     private ClientConnectionState clientConnectionState = ClientConnectionState.UNSECURE;
 

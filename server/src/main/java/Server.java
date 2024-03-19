@@ -6,20 +6,17 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.KeyPair;
 import java.security.Security;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 
 public class Server {
 
     public static HashMap<String, User> userDatabase = new HashMap<>();
 
-    public static List<User> onlineUserList = new ArrayList<>();
+    public static HashMap< String ,User> onlineUserList = new HashMap<>();
     public static KeyPair keyPair;
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
-    public static List<ClientHandler> clients = new ArrayList<>();
+    public static List<ClientHandler> clientSocketList = new ArrayList<>();
 
     public static void main(String[] args){
         int port = 12345;
@@ -47,6 +44,25 @@ public class Server {
             privateKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
             System.out.println("Private key[encoded] :: " + privateKeyEncoded);
 
+            // TODO: Burası silinecek...
+            Thread continuousThread = new Thread(() -> {
+                while (true) {
+                    // Sürekli çalışacak işlemleri buraya yazabilirsiniz
+
+                    try {
+
+                        Thread.sleep(10000);
+                        if(clientSocketList.size()>0){
+                            //broadcast("asdasd");
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+
+            continuousThread.start();
+
             // Server manage connections
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -54,7 +70,7 @@ public class Server {
 
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
                 Thread thread = new Thread(clientHandler);
-                clients.add(clientHandler);
+                clientSocketList.add(clientHandler);
                 thread.start();
             }
         } catch (IOException e) {
@@ -63,8 +79,32 @@ public class Server {
     }
 
     public static void broadcast(String message) {
-        for (ClientHandler client : clients) {
+        for (ClientHandler client : clientSocketList) {
             client.sendMessage(message);
+        }
+    }
+
+    public static void broadcastEnc(String message) throws Exception{
+        for (ClientHandler client : clientSocketList) {
+            client.sendMessage(EncryptionHandler.encryptAES(client.user.getSessionKey() ,message));
+        }
+    }
+
+    public static void broadcastTo(String username,String message){
+        for (ClientHandler client : clientSocketList) {
+            if(client.user.getUsername().equalsIgnoreCase(username)){
+                ClientHandler c = client;
+                System.out.println(c.user.getUsername());
+                client.sendMessage(message);
+            }
+        }
+    }
+
+    public static void broadcastToEnc(String username,String message) throws Exception{
+        for (ClientHandler client : clientSocketList) {
+            if(client.user.getUsername().equalsIgnoreCase(username)){
+                client.sendMessage(EncryptionHandler.encryptAES(client.user.getSessionKey() ,message));
+            }
         }
     }
 
