@@ -31,7 +31,6 @@ public class ClientHandler implements Runnable {
     }
 
     /**
-     * TODO: Burada kalındı...
      *
      * 1- ClientA, ClientB ile sohbet açmak ister
      * 2- Sunucu AES simetrik anahtar oluşturur ve her iki Client'a yollar (chatSessionKey)
@@ -205,14 +204,7 @@ public class ClientHandler implements Runnable {
                             break;
 
                         case "sendMessageTo":
-                            String to = jsonObject.getString("to");
-                            String data = jsonObject.getString("data");
-
-                            // TODO: Neden istenilen clientHandler'a gitmiyor ?
-                            System.out.println(jsonObject.getString("data"));
-                            Server.broadcastToEnc(to,plainText);
-                            //Server.broadcastEnc(data);
-
+                            Server.broadcastToEnc(jsonObject.getString("to"),plainText);
                             break;
 
                         /**

@@ -44,25 +44,6 @@ public class Server {
             privateKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
             System.out.println("Private key[encoded] :: " + privateKeyEncoded);
 
-            // TODO: Burası silinecek...
-            Thread continuousThread = new Thread(() -> {
-                while (true) {
-                    // Sürekli çalışacak işlemleri buraya yazabilirsiniz
-
-                    try {
-
-                        Thread.sleep(10000);
-                        if(clientSocketList.size()>0){
-                            //broadcast("asdasd");
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-
-            continuousThread.start();
-
             // Server manage connections
             while (true) {
                 Socket clientSocket = serverSocket.accept();
@@ -93,8 +74,6 @@ public class Server {
     public static void broadcastTo(String username,String message){
         for (ClientHandler client : clientSocketList) {
             if(client.user.getUsername().equalsIgnoreCase(username)){
-                ClientHandler c = client;
-                System.out.println(c.user.getUsername());
                 client.sendMessage(message);
             }
         }

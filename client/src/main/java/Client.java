@@ -17,7 +17,7 @@ public class Client {
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
     private static Socket socket;
-    private static BufferedReader userInput;
+    public static BufferedReader userInput;
     private static PrintWriter out;
     private static BufferedReader in;
     public static ClientConnectionState clientConnectionState;
@@ -108,8 +108,8 @@ public class Client {
             return;
         }
 
-        System.out.println("\n********** TO SERVER **********");
-        System.out.println(message);
+        // System.out.println("\n********** TO SERVER **********");
+        // System.out.println(message);
         out.println(message);
     }
 

@@ -18,6 +18,7 @@ public class UserInputHandler implements Runnable {
 
     @Override
     public void run() {
+        System.out.print("Welcome to secure chat program by YETKY ...");
         try {
             // Start connection protocol
             Client.clientConnectionState = ClientConnectionState.CONNECTION_PROTOCOL_STEP_1;
@@ -122,17 +123,15 @@ public class UserInputHandler implements Runnable {
 
             // start chat
             case SECURE_CHAT_PROTOCOL_STEP_2:
-                userInput.reset();
                 System.out.print("TO " + Client.chatUserName + ": ");
                 String textToUser = userInput.readLine();
                 encJsonData = new JSONObject();
                 encJsonData.put("text", textToUser);
 
-                // TODO: gelen chat session key
                 SecretKey chatSessionKey =  EncryptionHandler.getAESKey(Client.chatSessionKey);
                 String encChatMessage = encryptionHandler.encryptAES(chatSessionKey, encJsonData.toString());
-                System.out.println("CHAT SESSION KEY " + Client.chatSessionKey);
-                System.out.println("CHAT ENC " + encChatMessage);
+                // System.out.println("CHAT SESSION KEY " + Client.chatSessionKey);
+                // System.out.println("CHAT ENC " + encChatMessage);
 
                 jsonObject = new JSONObject();
                 jsonObject.put("userSession", Client.session);
@@ -188,51 +187,49 @@ public class UserInputHandler implements Runnable {
     }
 
     private void mainMenu() throws Exception{
-        System.out.print("Komut girin (login, user_list, chat, start_chat, show_chat_key, show_chat_user): ");
-        String command = userInput.readLine();
-
-        if (command.equals("login")) {
-            loginProtocol();
-
-        } else if (command.equals("user_list")) {
-            getUserListForChat();
-
-        } else if (command.equals("chat")) {
-            Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_1;
-            secureChatProtocol();
-
-        } else if (command.equals("start_chat")) {
-            Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
-            secureChatProtocol();
-
-        } else if (command.equals("show_chat_key")) {
-            System.out.println(Client.chatSessionKey);
-
-        } else if (command.equals("show_chat_user")) {
-            System.out.println(Client.chatUserName);
-
-        } else if (command.equals("test")) {
-            sendPlainTextToServer();
-
-        } else if (command.equals("test_enc")) {
-
-            System.out.print("Enter AES :");
-            String aesStr = userInput.readLine();
-
-            System.out.print("Enter Enc :");
-            String encChatMessage = userInput.readLine();
-
-            // TODO: gelen chat session key
-            SecretKey chatSessionKey =  EncryptionHandler.getAESKey(aesStr);
-            String chatMessage = EncryptionHandler.decryptAES(chatSessionKey, encChatMessage);
-            System.out.println("CHAT MSG " + chatMessage);
-
-        } else if (command.equals("exit")) {
-            System.out.println("Programdan çıkılıyor...");
-
-        } else {
-            System.out.println("Geçersiz komut!");
+        System.out.println("Please choose your action :");
+        for(ClientAction clientAction : ClientAction.values()){
+            if (clientAction!=ClientAction.NULL)
+                System.out.println("\t- " + clientAction.getActionName());
         }
+
+        String command = userInput.readLine();
+        ClientAction action = getClientAction(command);
+
+        switch (action){
+            case LOGIN:
+                loginProtocol();
+                break;
+            case USER_LIST:
+                getUserListForChat();
+                break;
+            case CHAT:
+                Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_1;
+                secureChatProtocol();
+                break;
+            case START_CHAT:
+                Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
+                secureChatProtocol();
+                break;
+            case INFO:
+                System.out.println("SESSION KEY : " + Base64.getEncoder().encodeToString(Client.sessionKey.getEncoded()));
+                System.out.println("CONNECTION STATE : " + Client.clientConnectionState);
+                System.out.println("CHAT SESSION KEY : " + Client.chatSessionKey);
+                System.out.println("CHAT ACTIVE USER : " + Client.chatUserName);
+                break;
+            default:
+                System.out.println("UNKNOWN COMMAND");
+                break;
+        }
+    }
+
+    private static ClientAction getClientAction(String command) {
+        for ( ClientAction action : ClientAction.values()) {
+            if (action.getActionName().equals(command)) {
+                return action;
+            }
+        }
+        return ClientAction.NULL;
     }
 
 }

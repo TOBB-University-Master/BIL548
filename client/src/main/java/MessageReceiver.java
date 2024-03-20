@@ -20,7 +20,6 @@ public class MessageReceiver implements Runnable {
 
                 // System.out.println("\n********** FROM SERVER **********");
                 // System.out.println(serverResponse);
-
                 handleMessage(serverResponse);
             }
         } catch (IOException e) {
@@ -76,10 +75,8 @@ public class MessageReceiver implements Runnable {
                         case "chatSessionKey":
                             Client.chatSessionKey = jsonObject.getString("chatSessionKey");
                             Client.chatUserName = jsonObject.getString("username");
+                            System.out.println("\n********** READY FOR CHAT **********");
 
-                            //Client.clientConnectionState = ClientConnectionState.SESSION_KEY;
-                            Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
-                            Client.userInputHandler.secureChatProtocol();
                             break;
 
                         case "sendMessageTo":
@@ -98,8 +95,6 @@ public class MessageReceiver implements Runnable {
                     SecretKey chatSessionKey = EncryptionHandler.getAESKey(Client.chatSessionKey);
                     String fromMsg = EncryptionHandler.decryptAES(chatSessionKey, encChatMsg);
                     System.out.println("FROM " + Client.chatUserName + " : " + fromMsg );
-                } else {
-                    System.out.println("CHAT ERROR ");
                 }
                 break;
         }
