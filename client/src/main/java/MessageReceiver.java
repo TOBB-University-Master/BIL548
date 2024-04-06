@@ -125,7 +125,7 @@ public class MessageReceiver implements Runnable {
 
                             // Send ticket to Bob
                             JSONObject encJsonData = new JSONObject();
-                            Client.aliceBobCR = "challengeResponseForChat";
+                            Client.aliceBobCR = "dummyKABValueForTicketBChallengeResponse";
                             encJsonData.put("kab", EncryptionHandler.encryptAES( Client.chatSecretKey , Client.aliceBobCR));
                             encJsonData.put("to", jsonObject.getString("to"));
                             encJsonData.put("ticketB", jsonObject.getString("ticketb"));
@@ -153,7 +153,7 @@ public class MessageReceiver implements Runnable {
                             try{
                                 kabCRNonce = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("kab"));
                                 if(kabCRNonce.equalsIgnoreCase(Client.aliceBobCR+"-1")){
-                                    logger.info(MarkerManager.getMarker("CHAT STATUS") , "********** READY FOR CHAT **********" + " Server Nonce:" + Client.aliceBobCR + " Incoming CRNonce:" + kabCRNonce);
+                                    logger.info(MarkerManager.getMarker("CHAT STATUS READY") , "**********" + " Server Nonce:" + Client.aliceBobCR + " Incoming CRNonce:" + kabCRNonce);
                                     break exitMain;
                                 }
                             } catch (Exception e){}

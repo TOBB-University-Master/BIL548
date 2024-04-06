@@ -3,7 +3,6 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.MarkerManager;
 import org.json.JSONObject;
 
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -13,7 +12,6 @@ import java.util.UUID;
 
 public class UserInputHandler implements Runnable {
     private BufferedReader userInput;
-    private PrintWriter out;
     private EncryptionHandler encryptionHandler;
     private static final Logger logger = LogManager.getLogger();
 
@@ -165,27 +163,6 @@ public class UserInputHandler implements Runnable {
         System.out.println("\n********** USER LIST FINISHED **********");
     }
 
-    /**
-     * TODO: Silinecek
-     *
-     * Plaint text göndermek için eklendi...
-     *
-     * @throws Exception
-     */
-    public void sendPlainTextToServer() throws Exception{
-        System.out.println("\n********** TEST STARTED **********");
-
-        JSONObject encJsonData = new JSONObject();
-        encJsonData.put("command", "test");
-
-        String encMessage = EncryptionHandler.encryptAES(Client.sessionKey, encJsonData.toString());
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("from", Client.session);
-        jsonObject.put("data", encMessage);
-        Client.sendMessageToServer(jsonObject.toString());
-
-        System.out.println("\n********** TEST FINISHED **********");
-    }
 
     private void mainMenu() throws Exception{
         System.out.println("Please choose your action :");
@@ -228,8 +205,6 @@ public class UserInputHandler implements Runnable {
 
                 break;
             case INFO:
-                System.out.println("SESSION KEY : " + Base64.getEncoder().encodeToString(Client.sessionKey.getEncoded()));
-                System.out.println("CONNECTION STATE : " + Client.clientConnectionState);
                 System.out.println("CHAT SESSION KEY : " + Client.chatSessionKey);
                 System.out.println("CHAT ACTIVE USER : " + Client.chatUserName);
                 break;

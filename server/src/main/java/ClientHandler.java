@@ -42,57 +42,6 @@ public class ClientHandler implements Runnable {
 
     /**
      *
-     * 1- ClientA, ClientB ile sohbet açmak ister
-     * 2- Sunucu AES simetrik anahtar oluşturur ve her iki Client'a yollar (chatSessionKey)
-     * 3- ClientA ve ClientB için chat state'ine geçilir
-     * 4- Chat state'nde ClientA'dan giden mesajlar ClientB'ye chatSessionKey ile şifrelenerek yollanır
-     * 5- Sunucu gelen mesajları direk diğer Client'a yollar
-     * 6- Chat state'nde Client'a gelen mesajlar chatSessionKey ile deşifre edilir
-     * 7- Chat state'inden çıkmak için :exit komutu kullanılabilir
-     *
-     */
-    private void secureChatProtocol(String toUserName) throws Exception{
-        // Her iki kullanıcı bulunur
-        // Kullanıcılar için ortak anahtar oluşturulur
-        String response="ERROR";
-        User toUser=null;
-        for( User tuser : Server.onlineUserList.values() ){
-            if(tuser.getUsername().equalsIgnoreCase(toUserName)){
-                toUser = tuser;
-            }
-        }
-
-        // Chat room oluşturulur
-        if(toUser!=null){
-            ChatRoom chatRoom = new ChatRoom();
-            chatRoom.getUsernameList().add(toUser.getUsername());
-
-            SecretKey secretKey =  EncryptionHandler.generateAESKey(128);
-            String AESChatSessionKeyBase64 = Base64.getEncoder().encodeToString(secretKey.getEncoded());
-            chatRoom.setSessionKey(secretKey);
-
-            JSONObject encJsonData = new JSONObject();
-            encJsonData.put("chatSessionKey", AESChatSessionKeyBase64);
-            encJsonData.put("command", "chatSessionKey");
-
-            // Send chatSessionKey to user1
-            encJsonData.put("username", user.getUsername() );
-            Server.broadcastTo(toUser.getUsername(), encryptionHandler.encryptAES(toUser.getSessionKey(), encJsonData.toString()));
-
-            // Send chatSessionKey to user2
-            encJsonData.put("username", toUser.getUsername() );
-            Server.broadcastTo(user.getUsername(), encryptionHandler.encryptAES(user.getSessionKey(), encJsonData.toString()));
-
-        } else {
-            response = "USER NOT FOUND";
-        }
-
-        response = encryptionHandler.encryptAES(user.getSessionKey() ,response);
-        out.println(response);
-    }
-
-    /**
-     *
      * client gelen veri aşağıdaki formatta olmalıdır
      *
      * command::data
@@ -182,6 +131,7 @@ public class ClientHandler implements Runnable {
                 break;
 
 
+            // TODO: Version_1 den kalan SESSION_KEY STATE'i
             case SESSION_KEY:
                 plainText = message;
                 JSONObject jsonObject = getJsonObject(plainText);
@@ -319,14 +269,15 @@ public class ClientHandler implements Runnable {
 
 
                         case "sendTicketToBob":
-                            // TODO: Logger eklenecek kimden kime proxy edildigi
-                            String sendToTicketUser = jsonObject.getString("to");
-                            Server.broadcastTo(sendToTicketUser,plainText);
+                            logger.info(MarkerManager.getMarker("PROXY MODE"), "FROM:" + user.getUsername() + " - TO:" + jsonObject.getString("to"));
+                            Server.broadcastTo(jsonObject.getString("to"),plainText);
+                            response = "TICKET & CR ";
                             break;
 
                         case "sendMessage":
-                            // TODO: Logger eklenecek kimden kime proxy edildigi
+                            logger.info(MarkerManager.getMarker("PROXY MODE"), "FROM:" + jsonObject.getString("from") + " - TO:" + jsonObject.getString("to"));
                             Server.broadcastTo(jsonObject.getString("to"),plainText);
+                            response = "Mesajınız gönderildi...";
                             break;
 
                         case "sendMessageTo":
