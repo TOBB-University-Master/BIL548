@@ -3,11 +3,13 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.MarkerManager;
 import org.json.JSONObject;
 
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Base64;
+import java.util.UUID;
 
 public class UserInputHandler implements Runnable {
     private BufferedReader userInput;
@@ -50,22 +52,25 @@ public class UserInputHandler implements Runnable {
      * Bu protokol ile Client-Server güvenli bağlantı için anahtar değişimi sağlanır
      */
     public void connectionProtocol() throws Exception{
-        logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "********** STARTED **********");
+        String sendToServer = null;
         switch (Client.clientConnectionState){
             case CONNECTION_PROTOCOL_STEP_1:
                 // SSL/TLS handshake start
-                Client.sendMessageToServer("hello::new");
+                sendToServer = "hello::new";
                 break;
             case CONNECTION_PROTOCOL_STEP_2:
-                System.out.println("Generating session key AES... ");
+                logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "Generating session key AES... ");
                 Client.sessionKey = EncryptionHandler.generateAESKey(128);
                 String AESSessionKeyBase64 = Base64.getEncoder().encodeToString(Client.sessionKey.getEncoded());
-                System.out.println("SessionKey::" + AESSessionKeyBase64);
-                String encryptedSessionKey = EncryptionHandler.encryptECDH(EncryptionHandler.serverEncodedPublicKey , AESSessionKeyBase64);
-                Client.sendMessageToServer(encryptedSessionKey);
+                logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "SessionKey::" + AESSessionKeyBase64);
+                sendToServer = EncryptionHandler.encryptECDH(EncryptionHandler.serverEncodedPublicKey , AESSessionKeyBase64);
                 break;
         }
-        logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "********** FINISHED **********");
+
+        if(sendToServer!=null){
+            logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), sendToServer);
+            Client.sendMessageToServer(sendToServer);
+        }
     }
 
 
@@ -81,12 +86,10 @@ public class UserInputHandler implements Runnable {
         Client.username = userInput.readLine();
         requestJsonObj.put("username", Client.username);
 
-        logger.info(MarkerManager.getMarker("WAIT FOR USER INPUT"), "Nonce: ");
-        Client.nonce = userInput.readLine();
+        Client.nonce = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 30);
         requestJsonObj.put("nonce", Client.nonce);
 
         logger.info(MarkerManager.getMarker("SERVER REQUEST"), requestJsonObj.toString());
-        logger.info(MarkerManager.getMarker("LOGIN PROCOTOL V2"), "********** FINISHED **********");
 
         Client.sendMessageToServer(requestJsonObj.toString());
     }
@@ -209,7 +212,6 @@ public class UserInputHandler implements Runnable {
                 // Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
                 // secureChatProtocol();
 
-                // TODO: Burada kullanıcı isminin tekrar girilmesine gerek yok
                 System.out.print("TO " + Client.chatUserName + ": ");
                 String textToUser = userInput.readLine();
 
@@ -220,6 +222,7 @@ public class UserInputHandler implements Runnable {
                 jsonObject.put("command", "sendMessage");
                 jsonObject.put("to", Client.chatUserName);
                 jsonObject.put("from", Client.username);
+                jsonObject.put("mac", EncryptionHandler.getTextMAC(Client.chatSecretKey, encChatMessage));
 
                 Client.sendMessageToServer(jsonObject.toString());
 

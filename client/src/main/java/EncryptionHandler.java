@@ -1,7 +1,4 @@
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
+import javax.crypto.*;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
@@ -29,6 +26,20 @@ public class EncryptionHandler {
         return sessionKey;
     }
      */
+
+    /**
+     *  Metin dizesini AES kullanarak şifrele
+     */
+    public static String getTextMAC(SecretKey secretKey, String text) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(secretKey);
+        byte[] macBytes = mac.doFinal(text.getBytes());
+        StringBuilder sb = new StringBuilder();
+        for (byte b : macBytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
 
     public static SecretKey getAESKey(String secretKeyString){
         try{

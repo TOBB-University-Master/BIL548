@@ -1,12 +1,20 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.MarkerManager;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import java.io.BufferedReader;
 import java.io.IOException;
 
+/**
+ * Client'a gelen mesajları handle eden thread
+ */
 public class MessageReceiver implements Runnable {
     private BufferedReader serverIn;
+    private static final Logger logger = LogManager.getLogger();
 
     public MessageReceiver(BufferedReader serverIn) {
         this.serverIn = serverIn;
@@ -14,12 +22,10 @@ public class MessageReceiver implements Runnable {
 
     @Override
     public void run() {
+        logger.info(MarkerManager.getMarker("START"), "Ready for incoming messages...");
         try {
             String serverResponse;
             while ((serverResponse = serverIn.readLine()) != null) {
-
-                // System.out.println("\n********** FROM SERVER **********");
-                // System.out.println(serverResponse);
                 handleMessage(serverResponse);
             }
         } catch (IOException e) {
@@ -36,7 +42,9 @@ public class MessageReceiver implements Runnable {
      * @return
      */
     public void handleMessage(String message) throws Exception{
+        logger.info(MarkerManager.getMarker("INCOMING MESSAGE") , message);
         String[] response;
+        String plainText = "";
 
         exitMain:
         switch (Client.clientConnectionState) {
@@ -44,8 +52,6 @@ public class MessageReceiver implements Runnable {
             // sadece PK: varsa çalışır
             case UNSECURE:
             case CONNECTION_PROTOCOL_STEP_1:
-                // createSessionKey(message);
-                System.out.println("\n********** CLIENT INTERNAL OPS **********");
                 if(message.contains("::") && message.split("::").length==2){
                     String serverRequestCommand = message.split("::")[0];
                     if(serverRequestCommand.trim().equalsIgnoreCase("PK")){
@@ -67,20 +73,19 @@ public class MessageReceiver implements Runnable {
 
             case SESSION_KEY:
             case SECURE_CHAT_PROTOCOL_STEP_1:
-                // TODO: Kullanıcı parolası herkesin 12345 şimdilik
-                System.out.println("Message :: " + message);
-                String plainText = "";
 
                 // TRY TO DECRYPT WITH LONG TERM KEY
                 try{
                     // 12345 user password
+                    // TODO: Kullanıcı parolası herkesin 12345 şimdilik
                     Client.longTermSecretKey = EncryptionHandler.getAESKey("12345");
                     plainText = EncryptionHandler.decryptAES(Client.longTermSecretKey, message);
-                    System.out.println(plainText);
+                    logger.info(MarkerManager.getMarker("LONG-TERM KEY DEC") , plainText);
 
                     JSONObject jsonObject = tryToGetJsonObject(plainText);
                     if(jsonObject!=null){
                         if(Client.nonce.equalsIgnoreCase(jsonObject.getString("nonce"))){
+                            logger.info(MarkerManager.getMarker("LOGIN NONCE MATCH") , "Client nonce:" + Client.nonce + " - " + " Server nonce:" + jsonObject.getString("nonce"));
                             Client.sessionKey = EncryptionHandler.getAESKey(jsonObject.getString("session"));
                             Client.TGT = jsonObject.getString("tgt");
                             Client.sessionTimestamp = jsonObject.getString("timestamp");
@@ -93,21 +98,19 @@ public class MessageReceiver implements Runnable {
                             Client.sendMessageToServer(encJsonData.toString());
 
                         } else {
-                            System.out.println("NONCE HATASI...");
+                            logger.error(MarkerManager.getMarker("LOGIN NONCE ERROR") , Client.nonce + " != " + jsonObject.getString("nonce"));
                         }
                     }
 
-                    System.out.println("SECURE_CHAT_PROTOCOL_STEP_1 EXIT#1...");
                     break exitMain;
                 } catch (Exception e){
-                    // continue;
-                    plainText = message;
+                    plainText = message; // continue;
                 }
 
                 // TRY TO DECRYPT WITH SHORT TERM KEY (SESSION)
                 try{
                     plainText = EncryptionHandler.decryptAES(Client.sessionKey, message);
-                    System.out.println(plainText);
+                    logger.info(MarkerManager.getMarker("SHORT-TERM KEY DEC") , plainText);
 
                     JSONObject jsonObject = tryToGetJsonObject(plainText);
                     if(jsonObject!=null){
@@ -133,24 +136,21 @@ public class MessageReceiver implements Runnable {
                     plainText = message;
                 }
 
-
-                // TRY TO
-                System.out.println(plainText);
+                // Long term & short term key cannot decrypt incoming message so continue as plain
                 JSONObject jsonObject = tryToGetJsonObject(plainText);
                 if(jsonObject!=null){
                     switch (jsonObject.getString("command")){
                         case "login":
-                            System.out.println("LOGIN STATUS :: " + jsonObject.getString("status"));
+                            logger.info(MarkerManager.getMarker("LOGIN STATUS") , jsonObject.getString("status"));
                             break;
 
                         case "sendTicketToBob":
-
                             // KAB değeri varsa decrypt edilmesi gerekir
                             String kabCRNonce;
                             try{
                                 kabCRNonce = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("kab"));
                                 if(kabCRNonce.equalsIgnoreCase(Client.aliceBobCR+"-1")){
-                                    System.out.println("\n********** READY FOR CHAT **********");
+                                    logger.info(MarkerManager.getMarker("CHAT STATUS") , "********** READY FOR CHAT **********");
                                     break exitMain;
                                 }
                             } catch (Exception e){}
@@ -161,11 +161,11 @@ public class MessageReceiver implements Runnable {
                             JSONObject ticketJson = new JSONObject(ticketB);
                             Client.chatSecretKey =  EncryptionHandler.getAESKey(ticketJson.getString("chatkey"));
                             Client.chatUserName = ticketJson.getString("to");
-                            System.out.println("TICKET PLAIN::" + ticketB);
+                            logger.info(MarkerManager.getMarker("TICKET PLAIN") , ticketB);
 
                             // Decrypt KAB nonce
                             kabCRNonce = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("kab"));
-                            System.out.println("KAB PLAIN::" + kabCRNonce);
+                            logger.info(MarkerManager.getMarker("KAB PLAIN") , kabCRNonce);
 
                             // Send Challange Response value To Alice
                             JSONObject encJsonData = new JSONObject();
@@ -177,18 +177,22 @@ public class MessageReceiver implements Runnable {
                             break;
 
                         case "sendMessage":
-                            String msg = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("msg"));
-                            System.out.println("---------------------");
-                            System.out.println("FROM " + jsonObject.getString("from"));
-                            System.out.println(msg);
-                            System.out.println("---------------------");
+                            // Gelen mesajın MAC'i kontrol edilir
+                            String macResult = EncryptionHandler.getTextMAC(Client.chatSecretKey, jsonObject.getString("msg"));
+                            if(macResult.equalsIgnoreCase(jsonObject.getString("mac"))){
+                                String msg = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("msg"));
+                                logger.info(MarkerManager.getMarker("MAC SUCCESS" ) , "Incoming Message MAC:" + jsonObject.getString("mac") + " - " + " Client Calculated MAC:" + macResult);
+                                logger.warn(MarkerManager.getMarker("FROM " + jsonObject.getString("from")) , msg);
+                            } else {
+                                logger.error(MarkerManager.getMarker("MAC ERROR") , "MAC NOT MATCH");
+                            }
+
                             break;
 
                         case "chatSessionKey":
                             Client.chatSessionKey = jsonObject.getString("chatSessionKey");
                             Client.chatUserName = jsonObject.getString("username");
-                            System.out.println("\n********** READY FOR CHAT **********");
-
+                            logger.info(MarkerManager.getMarker("CHAT STATUS") , "********** READY FOR CHAT **********");
                             break;
 
                         case "sendMessageTo":
