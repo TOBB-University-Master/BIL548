@@ -1,6 +1,8 @@
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
@@ -24,9 +26,23 @@ public class EncryptionHandler {
 
 
     public SecretKey getAESKey(String secretKeyString){
-        byte[] decodedKey = Base64.getDecoder().decode(secretKeyString);
-        SecretKey sessionKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
-        return sessionKey;
+        try{
+            // secretKeyString to byte
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] salt = new byte[16];
+            // Optional
+            PBEKeySpec spec = new PBEKeySpec(secretKeyString.toCharArray(), salt, 10000, 128);
+            SecretKey secretKey = factory.generateSecret(spec);
+
+            byte[] encodedKey = secretKey.getEncoded();
+            return new SecretKeySpec(encodedKey, "AES");
+
+            // byte[] decodedKey = Base64.getDecoder().decode(secretKeyString);
+            // SecretKey sessionKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+            // return sessionKey;
+        } catch (Exception e){
+            return null;
+        }
     }
 
 

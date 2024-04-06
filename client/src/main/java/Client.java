@@ -11,7 +11,15 @@ public class Client {
 
     private static String serverName="127.0.0.1";;
     private static int serverPort=12345;
+    public static String aliceBobCR = null;
+    public static SecretKey chatSecretKey = null;
+    public static String chatState = null;
+    public static String username = null;
+    public static String TGT = null;
+    public static SecretKey longTermSecretKey = null;
+    public static String nonce = null;
     public static String session = null;
+    public static String sessionTimestamp = null;
     public static SecretKey sessionKey=null;
     public static KeyPair keyPair;
     public static String publicKeyEncoded;

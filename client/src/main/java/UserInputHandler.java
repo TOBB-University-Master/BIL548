@@ -71,23 +71,25 @@ public class UserInputHandler implements Runnable {
     private void loginProtocol() throws Exception{
         System.out.println("\n********** LOGIN PROCOTOL STARTED **********");
 
-        /**
-         * Simetrik anahtar ile kullanıcı login olur
-         */
         JSONObject encJsonData = new JSONObject();
         System.out.print("Username: ");
-        String username = userInput.readLine();
-        encJsonData.put("username", username);
-        System.out.print("Password: ");
-        String password = userInput.readLine();
-        encJsonData.put("password", password);
+        Client.username = userInput.readLine();
+        encJsonData.put("username", Client.username);
+        System.out.print("Nonce: ");
+        Client.nonce = userInput.readLine();
+        encJsonData.put("nonce", Client.nonce);
         encJsonData.put("command", "login");
 
+// TODO: Burası artık gönderilmiyor...
+/*
         String encMessage = encryptionHandler.encryptAES( Client.sessionKey , encJsonData.toString());
         JSONObject jsonObject = new JSONObject();
         jsonObject.put("from", Client.session);
-        jsonObject.put("data", encMessage);
+        jsonObject.put("data", encJsonData);
         Client.sendMessageToServer(jsonObject.toString());
+*/
+
+        Client.sendMessageToServer(encJsonData.toString());
 
         System.out.println("\n********** LOGIN PROCOTOL FINISHED **********");
     }
@@ -107,16 +109,15 @@ public class UserInputHandler implements Runnable {
                 System.out.println("\n********** SECURE CHAT PROTOCOL STARTED **********");
 
                 encJsonData = new JSONObject();
-                System.out.print("Enter username for chat without , : ");
-                String username = userInput.readLine();
-                encJsonData.put("username", username);
+                System.out.print("Enter username for chat : ");
+                String chatUser = userInput.readLine();
+                encJsonData.put("from", Client.username);
+                encJsonData.put("to", chatUser);
                 encJsonData.put("command", "chat");
+                encJsonData.put("tgt", Client.TGT);
+                encJsonData.put("sa", encryptionHandler.encryptAES(Client.sessionKey, "CRNumber"));
 
-                String encMessage = encryptionHandler.encryptAES(Client.sessionKey, encJsonData.toString());
-                jsonObject = new JSONObject();
-                jsonObject.put("from", Client.session);
-                jsonObject.put("data", encMessage);
-                Client.sendMessageToServer(jsonObject.toString());
+                Client.sendMessageToServer(encJsonData.toString());
 
                 System.out.println("\n********** SECURE CHAT PROCOTOL FINISHED **********");
                 break;
@@ -207,9 +208,24 @@ public class UserInputHandler implements Runnable {
                 Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_1;
                 secureChatProtocol();
                 break;
-            case START_CHAT:
-                Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
-                secureChatProtocol();
+            case SEND_MESSAGE:
+                // Client.clientConnectionState = ClientConnectionState.SECURE_CHAT_PROTOCOL_STEP_2;
+                // secureChatProtocol();
+
+                // TODO: Burada kullanıcı isminin tekrar girilmesine gerek yok
+                System.out.print("TO " + Client.chatUserName + ": ");
+                String textToUser = userInput.readLine();
+
+                String encChatMessage = encryptionHandler.encryptAES(Client.chatSecretKey, textToUser);
+
+                JSONObject jsonObject = new JSONObject();
+                jsonObject.put("msg", encChatMessage);
+                jsonObject.put("command", "sendMessage");
+                jsonObject.put("to", Client.chatUserName);
+                jsonObject.put("from", Client.username);
+
+                Client.sendMessageToServer(jsonObject.toString());
+
                 break;
             case INFO:
                 System.out.println("SESSION KEY : " + Base64.getEncoder().encodeToString(Client.sessionKey.getEncoded()));

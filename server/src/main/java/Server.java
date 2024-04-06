@@ -21,8 +21,8 @@ public class Server {
     public static void main(String[] args){
         int port = 12345;
 
-        User user1 = new User("1", "kemal", "12345");    // password 12345
-        User user2 = new User("2", "sami", "12345" );
+        User user1 = new User("1", "alice", "12345");    // password 12345
+        User user2 = new User("2", "bob", "12345" );
         User user3 = new User("3", "karaca", "12345");
 
         userDatabase.put(user1.getUsername(), user1);
