@@ -4,6 +4,10 @@ import java.net.Socket;
 import java.security.KeyPair;
 import java.security.Security;
 import java.util.Base64;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.MarkerManager;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.json.JSONObject;
 
@@ -31,9 +35,9 @@ public class Client {
     public static ClientConnectionState clientConnectionState;
     public static MessageReceiver messageReceiver;
     public static UserInputHandler userInputHandler;
-
     public static String chatSessionKey;
     public static String chatUserName;
+    private static final Logger logger = LogManager.getLogger(Client.class);
 
     public static void main(String[] args){
         userInput = new BufferedReader(new InputStreamReader(System.in));
@@ -41,13 +45,13 @@ public class Client {
 
         // Long-term DH-EC anahtar ikilisi olusturulur
         keyPair = EncryptionHandler.generateECDHKeyPair();
-        System.out.println("Sunucu sertifikası oluşturuldu :: ");
+        logger.info(MarkerManager.getMarker("GENERATE ECDH KEYPAIR"), "Sunucu sertifikası oluşturuldu");
 
         publicKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
-        System.out.println("Public key[encoded] :: " + publicKeyEncoded);
+        logger.info(MarkerManager.getMarker("GENERATE ECDH PUBLIC"), "Public key[encoded] :: " + publicKeyEncoded);
 
         privateKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-        System.out.println("Private key[encoded] :: " + privateKeyEncoded);
+        logger.info(MarkerManager.getMarker("GENERATE ECDH PRIVATE"), "Private key[encoded] :: " + privateKeyEncoded);
 
         try {
             // Connecting to server ...
@@ -81,7 +85,7 @@ public class Client {
      */
     private static void connectToServer(String serverAddress, int serverPort) throws IOException {
         if (socket!=null && socket.isConnected() && !socket.isClosed()) {
-            System.out.println("Zaten sunucuya bağlısınız.");
+            logger.warn(MarkerManager.getMarker("CONNECTION"), "Zaten sunucuya bağlısınız");
             return;
         }
         socket = new Socket(serverAddress, serverPort);
@@ -112,12 +116,10 @@ public class Client {
      */
     public static void sendMessageToServer(String message) throws Exception {
         if (!socket.isConnected()) {
-            System.out.println("ERROR:NOT_CONNECTED");
+            logger.error(MarkerManager.getMarker("CONNECTION ERROR"), "NOT_CONNECTED");
             return;
         }
 
-        // System.out.println("\n********** TO SERVER **********");
-        // System.out.println(message);
         out.println(message);
     }
 

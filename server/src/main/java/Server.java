@@ -1,4 +1,8 @@
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.io.IOException;
@@ -10,13 +14,15 @@ import java.util.*;
 
 public class Server {
 
+    public static String SERVER_PRIVATE_KEY = "SERVER_PRIVATE_KEY";
     public static HashMap<String, User> userDatabase = new HashMap<>();
-
     public static HashMap< String ,User> onlineUserList = new HashMap<>();
     public static KeyPair keyPair;
     public static String publicKeyEncoded;
     public static String privateKeyEncoded;
     public static List<ClientHandler> clientSocketList = new ArrayList<>();
+    private static final Logger logger = LogManager.getLogger(Server.class);
+    private static final Marker NEW_CONNECTION = MarkerManager.getMarker("NEW CONNECTION");
 
     public static void main(String[] args){
         int port = 12345;
@@ -32,22 +38,22 @@ public class Server {
         try {
             Security.addProvider(new BouncyCastleProvider());
             ServerSocket serverSocket = new ServerSocket(port);
-            System.out.println("Sunucu başlatıldı :: port " + port + " dinleniyor...");
+            logger.info("Sunucu başlatıldı :: port " + port + " dinleniyor...");
 
             // Long-term DH-EC anahtar ikilisi olusturulur
             keyPair = EncryptionHandler.generateECDHKeyPair();
-            System.out.println("Sunucu sertifikası oluşturuldu :: ");
+            logger.info("Sunucu sertifikası oluşturuldu");
 
             publicKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
-            System.out.println("Public key[encoded] :: " + publicKeyEncoded);
+            logger.info("Public key[encoded] :: " + publicKeyEncoded);
 
             privateKeyEncoded = Base64.getEncoder().encodeToString(keyPair.getPrivate().getEncoded());
-            System.out.println("Private key[encoded] :: " + privateKeyEncoded);
+            logger.info("Private key[encoded] :: " + privateKeyEncoded);
 
             // Server manage connections
             while (true) {
                 Socket clientSocket = serverSocket.accept();
-                System.out.println("Yeni bir client bağlantısı alındı: " + clientSocket);
+                logger.info(NEW_CONNECTION , "Yeni bir client bağlantısı alındı: " + clientSocket);
 
                 ClientHandler clientHandler = new ClientHandler(clientSocket);
                 Thread thread = new Thread(clientHandler);

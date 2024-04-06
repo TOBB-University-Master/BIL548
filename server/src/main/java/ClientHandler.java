@@ -1,3 +1,7 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.Marker;
+import org.apache.logging.log4j.MarkerManager;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -19,10 +23,15 @@ public class ClientHandler implements Runnable {
     private Socket clientSocket;
     private PrintWriter out;
     private BufferedReader in;
-
     private String session;
-
     private EncryptionHandler encryptionHandler;
+    private static final Logger logger = LogManager.getLogger(ClientHandler.class);
+
+    private static final Marker VERSION_1 = MarkerManager.getMarker("VERSION 1");
+    private static final Marker CLIENT_REQUEST = MarkerManager.getMarker("CLIENT REQUEST");
+    private static final Marker ENCRYPTED_TEXT = MarkerManager.getMarker("ENCRYPTED TEXT");
+    private static final Marker PLAIN_TEXT = MarkerManager.getMarker("PLAIN TEXT");
+    private static final Marker CLIENT_RESPONSE = MarkerManager.getMarker("CLIENT RESPONSE");
 
     public ClientHandler(Socket clientSocket) {
         this.user = new User();
@@ -125,11 +134,14 @@ public class ClientHandler implements Runnable {
      * @param message
      */
     private void handleMessage(String message) throws Exception{
-        System.out.println("\nCLIENT REQUEST MSG: " + message);
+        logger.info(CLIENT_REQUEST , "CLIENT REQUEST :: " + message);
 
-        String response = "RESPONSE:REQUEST FORMAT MUST command::data";
+        String response = "RESPONSE:REQUEST FORMAT MUST JSON FORMAT";
+        JSONObject responseJsonObject = new JSONObject();
+        responseJsonObject.put("status" , "start");
         String command = null;
         String[] request;
+        String plainText = "";
 
         try {
             JSONObject jsonObject = new JSONObject(message);
@@ -163,7 +175,7 @@ public class ClientHandler implements Runnable {
 
             case SSL_HANDSHAKE_START:
                 String sessionKey = EncryptionHandler.decryptECDH(message);
-                System.out.println("Session Key : " + sessionKey);
+                logger.info(CLIENT_REQUEST , ClientConnectionState.SSL_HANDSHAKE_START.name() +  " :: SESSION KEY :: " + sessionKey);
                 user.setClientConnectionState(ClientConnectionState.SESSION_KEY);
                 user.setSessionKey(encryptionHandler.getAESKey(sessionKey));
                 if(Server.onlineUserList.get(user.getSession())==null){
@@ -172,22 +184,23 @@ public class ClientHandler implements Runnable {
                 response = "hello::done::"+user.getUsername();
                 break;
 
-            // All messages will be encrypted
+
             case SESSION_KEY:
-                //String plainText = encryptionHandler.decryptAES(user.getSessionKey() ,message);
-                String plainText = message;
-                System.out.println("PLAIN TEXT : " + plainText);
+                plainText = message;
                 JSONObject jsonObject = getJsonObject(plainText);
                 if(jsonObject!=null){
                     switch (jsonObject.getString("command")){
 
                         case "login":
+                            logger.info(MarkerManager.getMarker("LOGIN"), "********** START **********");
                             String username = jsonObject.getString("username");
                             String nonce = jsonObject.getString("nonce");
 
                             User userInDB = Server.userDatabase.get(username);
                             if(userInDB==null){
                                 response = "RESPONSE::USER_NOT_FOUND";
+                                responseJsonObject.put("status" , "error");
+                                responseJsonObject.put("statusMsg" , "user not found");
                             } else {
                                 user.setId(userInDB.getId());
                                 user.setUsername(userInDB.getUsername());
@@ -211,32 +224,32 @@ public class ClientHandler implements Runnable {
                                 encJsonData.put("tgt", __TGT__);
                                 encJsonData.put("nonce", nonce);
                                 encJsonData.put("timestamp", timestamp.toString());
-                                System.out.println(encJsonData.toString());
-
+                                logger.info(MarkerManager.getMarker("LOGIN PLAIN TEXT"), encJsonData.toString());
 
                                 SecretKey secretKey = encryptionHandler.getAESKey(userInDB.getPassword());
                                 String encryptedText = EncryptionHandler.encryptAES(secretKey, encJsonData.toString());
-                                System.out.println(encryptedText);
+                                logger.info(MarkerManager.getMarker("LOGIN ENC TEXT"), encryptedText);
                                 response = encryptedText;
                             }
+
+                            logger.info(MarkerManager.getMarker("LOGIN"), "********** C&R **********");
                             break;
 
                         case "login_final":
                             JSONObject responseJson = new JSONObject();
-
                             String TGTEncrypted = jsonObject.getString("tgt");
                             String SAEncrypted = jsonObject.getString("sa");
-                            System.out.println("********** LOGIN FINAL STARTED **********");
+                            logger.info(MarkerManager.getMarker("LOGIN TGT ENCRYPTED"), TGTEncrypted);
 
-                            String TGTPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey("SERVER_PRIVATE_KEY"),TGTEncrypted);
-                            System.out.println(TGTPlain);
+                            String TGTPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey(Server.SERVER_PRIVATE_KEY),TGTEncrypted);
+                            logger.info(MarkerManager.getMarker("LOGIN TGT PLAIN"), TGTPlain);
 
                             JSONObject TGTJsonObject = new JSONObject(TGTPlain);
                             String sessionKeyForDecryption = TGTJsonObject.getString("session");
                             String SAPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey(sessionKeyForDecryption),SAEncrypted);
 
-                            System.out.println("SA  Timestamp :: " + SAPlain);
-                            System.out.println("TGT Timestamp :: " + TGTJsonObject.getString("timestamp"));
+                            logger.info(MarkerManager.getMarker("LOGIN SA ENCRYPTED"), SAEncrypted);
+                            logger.info(MarkerManager.getMarker("LOGIN SA PLAIN"), SAPlain);
 
                             responseJson.put("command" , "login");
                             if(SAPlain.equalsIgnoreCase(TGTJsonObject.getString("timestamp"))){
@@ -246,8 +259,6 @@ public class ClientHandler implements Runnable {
                             }
 
                             response = responseJson.toString();
-                            // TODO : STATE Değişecek
-                            System.out.println("********** LOGIN FINAL FINISHED **********");
                             break ;
 
                         case "user_list":
@@ -256,8 +267,7 @@ public class ClientHandler implements Runnable {
                             break;
 
                         case "chat":
-                            // secureChatProtocol(jsonObject.getString("username"));
-
+                            logger.info(MarkerManager.getMarker("CHAT"), "********** START **********");
                             String chatFromUser = jsonObject.getString("from");
                             String chatToUser = jsonObject.getString("to");
                             String chatTGTEncrypted = jsonObject.getString("tgt");
@@ -268,14 +278,18 @@ public class ClientHandler implements Runnable {
                                 response = "RESPONSE::USER_NOT_FOUND";
                             } else {
 
-                                String chatTGTPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey("SERVER_PRIVATE_KEY"),chatTGTEncrypted);
-                                System.out.println(chatTGTPlain);
+                                String chatTGTPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey(Server.SERVER_PRIVATE_KEY),chatTGTEncrypted);
+                                logger.info(MarkerManager.getMarker("CHAT TGT ENCRYPTED"), chatTGTEncrypted);
+                                logger.info(MarkerManager.getMarker("CHAT TGT PLAIN"), chatTGTPlain);
 
                                 JSONObject chatTGTJsonObject = new JSONObject(chatTGTPlain);
                                 String chatSessionKeyForDecryption = chatTGTJsonObject.getString("session");
 
                                 String chatSAPlain = encryptionHandler.decryptAES(encryptionHandler.getAESKey(chatSessionKeyForDecryption),chatSAEncrypted);
                                 String chatKey = UUID.randomUUID().toString().replaceAll("-", "").substring(0, 30);        // random 30 length word
+
+                                logger.info(MarkerManager.getMarker("CHAT SA PLAIN"), chatSAPlain);
+                                logger.info(MarkerManager.getMarker("CHAT GENERATE KAB"), chatKey);
 
                                 JSONObject ticketBJson = new JSONObject();
                                 ticketBJson.put("to", chatFromUser);
@@ -284,6 +298,10 @@ public class ClientHandler implements Runnable {
                                 // Encrypt ticket by Bob's key
                                 String ticketEncryptedText = EncryptionHandler.encryptAES(chatUserInDB.getSessionKey(), ticketBJson.toString());
 
+                                logger.info(MarkerManager.getMarker("CHAT TICKETB PLAIN"), ticketBJson.toString());
+                                logger.info(MarkerManager.getMarker("CHAT TICKETB ENCRYPTED"), ticketEncryptedText);
+                                logger.info(MarkerManager.getMarker("CHAT TICKETB OWNER"), chatUserInDB.getUsername());
+
 
                                 JSONObject encJsonData = new JSONObject();
                                 encJsonData.put("to", chatToUser);
@@ -291,34 +309,27 @@ public class ClientHandler implements Runnable {
                                 encJsonData.put("state", "initial");
                                 encJsonData.put("ticketb", ticketEncryptedText);
                                 encJsonData.put("nonce", chatSAPlain);
+                                logger.info(MarkerManager.getMarker("CHAT RESPONSE PLAIN"), encJsonData.toString());
 
                                 // SessionA ile encrypt edilir
                                 response = EncryptionHandler.encryptAES(encryptionHandler.getAESKey(chatSessionKeyForDecryption), encJsonData.toString());
-
-                                System.out.println(encJsonData.toString());
                             }
                             break;
 
 
                         case "sendTicketToBob":
+                            // TODO: Logger eklenecek kimden kime proxy edildigi
                             String sendToTicketUser = jsonObject.getString("to");
                             Server.broadcastTo(sendToTicketUser,plainText);
                             break;
+
                         case "sendMessage":
+                            // TODO: Logger eklenecek kimden kime proxy edildigi
                             Server.broadcastTo(jsonObject.getString("to"),plainText);
                             break;
 
                         case "sendMessageTo":
                             Server.broadcastToEnc(jsonObject.getString("to"),plainText);
-                            break;
-
-                        /**
-                         * TODO: Silinecek
-                         *
-                         * Plain text göndermek için eklendi...
-                         */
-                        case "test":
-                            Server.broadcastToEnc("sami","testasdasds");
                             break;
 
                         default:
@@ -327,8 +338,6 @@ public class ClientHandler implements Runnable {
                     }
                 }
 
-                // response = encryptionHandler.encryptAES(user.getSessionKey() ,response);
-                System.out.println(response);
                 break;
 
             // Unknown state
@@ -337,6 +346,8 @@ public class ClientHandler implements Runnable {
                 break;
 
         } // end-of-session-key-operation
+
+        logger.info(CLIENT_RESPONSE, response);
         out.println(response);
     }
 

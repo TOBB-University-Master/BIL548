@@ -1,3 +1,6 @@
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.MarkerManager;
 import org.json.JSONObject;
 
 import javax.crypto.SecretKey;
@@ -10,6 +13,7 @@ public class UserInputHandler implements Runnable {
     private BufferedReader userInput;
     private PrintWriter out;
     private EncryptionHandler encryptionHandler;
+    private static final Logger logger = LogManager.getLogger();
 
     public UserInputHandler(BufferedReader userInput, PrintWriter out) {
         this.userInput = userInput;
@@ -18,7 +22,7 @@ public class UserInputHandler implements Runnable {
 
     @Override
     public void run() {
-        System.out.print("Welcome to secure chat program by YETKY ...");
+        logger.info(MarkerManager.getMarker("START"), "Welcome to secure chat program by YETKY ...");
         try {
             // Start connection protocol
             Client.clientConnectionState = ClientConnectionState.CONNECTION_PROTOCOL_STEP_1;
@@ -46,7 +50,7 @@ public class UserInputHandler implements Runnable {
      * Bu protokol ile Client-Server güvenli bağlantı için anahtar değişimi sağlanır
      */
     public void connectionProtocol() throws Exception{
-        System.out.println("\n********** CONNECTION PROCOTOL STARTED **********");
+        logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "********** STARTED **********");
         switch (Client.clientConnectionState){
             case CONNECTION_PROTOCOL_STEP_1:
                 // SSL/TLS handshake start
@@ -61,7 +65,7 @@ public class UserInputHandler implements Runnable {
                 Client.sendMessageToServer(encryptedSessionKey);
                 break;
         }
-        System.out.println("\n********** CONNECTION PROCOTOL FINISHED **********");
+        logger.info(MarkerManager.getMarker("CONNECTION PROCOTOL V1"), "********** FINISHED **********");
     }
 
 
@@ -69,29 +73,22 @@ public class UserInputHandler implements Runnable {
      * Bu protokol ile Client-Server güvenli bağlantı için anahtar değişimi sağlanır
      */
     private void loginProtocol() throws Exception{
-        System.out.println("\n********** LOGIN PROCOTOL STARTED **********");
+        JSONObject requestJsonObj = new JSONObject();
+        requestJsonObj.put("command", "login");
+        logger.info(MarkerManager.getMarker("LOGIN PROCOTOL V2"), "********** STARTED **********");
 
-        JSONObject encJsonData = new JSONObject();
-        System.out.print("Username: ");
+        logger.info(MarkerManager.getMarker("WAIT FOR USER INPUT"), "Username: ");
         Client.username = userInput.readLine();
-        encJsonData.put("username", Client.username);
-        System.out.print("Nonce: ");
+        requestJsonObj.put("username", Client.username);
+
+        logger.info(MarkerManager.getMarker("WAIT FOR USER INPUT"), "Nonce: ");
         Client.nonce = userInput.readLine();
-        encJsonData.put("nonce", Client.nonce);
-        encJsonData.put("command", "login");
+        requestJsonObj.put("nonce", Client.nonce);
 
-// TODO: Burası artık gönderilmiyor...
-/*
-        String encMessage = encryptionHandler.encryptAES( Client.sessionKey , encJsonData.toString());
-        JSONObject jsonObject = new JSONObject();
-        jsonObject.put("from", Client.session);
-        jsonObject.put("data", encJsonData);
-        Client.sendMessageToServer(jsonObject.toString());
-*/
+        logger.info(MarkerManager.getMarker("SERVER REQUEST"), requestJsonObj.toString());
+        logger.info(MarkerManager.getMarker("LOGIN PROCOTOL V2"), "********** FINISHED **********");
 
-        Client.sendMessageToServer(encJsonData.toString());
-
-        System.out.println("\n********** LOGIN PROCOTOL FINISHED **********");
+        Client.sendMessageToServer(requestJsonObj.toString());
     }
 
 
