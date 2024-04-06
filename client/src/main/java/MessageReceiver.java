@@ -76,10 +76,13 @@ public class MessageReceiver implements Runnable {
 
                 // TRY TO DECRYPT WITH LONG TERM KEY
                 try{
-                    // 12345 user password
-                    // TODO: Kullanıcı parolası herkesin 12345 şimdilik
-                    Client.longTermSecretKey = EncryptionHandler.getAESKey("12345");
-                    plainText = EncryptionHandler.decryptAES(Client.longTermSecretKey, message);
+
+                    // Client.longTermSecretKey = EncryptionHandler.getAESKey("12345");
+                    //plainText = EncryptionHandler.decryptAES(Client.longTermSecretKey, message);
+
+                    String privateKey =  Client.userPrivateKeyList.get(Client.username);
+                    plainText = EncryptionHandler.decryptECDH(privateKey, message);
+
                     logger.info(MarkerManager.getMarker("LONG-TERM KEY DEC") , plainText);
 
                     JSONObject jsonObject = tryToGetJsonObject(plainText);
@@ -150,7 +153,7 @@ public class MessageReceiver implements Runnable {
                             try{
                                 kabCRNonce = EncryptionHandler.decryptAES(Client.chatSecretKey, jsonObject.getString("kab"));
                                 if(kabCRNonce.equalsIgnoreCase(Client.aliceBobCR+"-1")){
-                                    logger.info(MarkerManager.getMarker("CHAT STATUS") , "********** READY FOR CHAT **********");
+                                    logger.info(MarkerManager.getMarker("CHAT STATUS") , "********** READY FOR CHAT **********" + " Server Nonce:" + Client.aliceBobCR + " Incoming CRNonce:" + kabCRNonce);
                                     break exitMain;
                                 }
                             } catch (Exception e){}

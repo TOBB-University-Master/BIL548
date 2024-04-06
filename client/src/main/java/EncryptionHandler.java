@@ -1,8 +1,11 @@
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+
 import javax.crypto.*;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.security.*;
 import java.security.spec.ECGenParameterSpec;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 public class EncryptionHandler {
@@ -88,6 +91,8 @@ public class EncryptionHandler {
      * Sunucu tarafından gelen public key ile String message Encrypt edilir
      */
     public static String encryptECDH(String publicKeyEncoded , String message) throws Exception{
+        Security.addProvider(new BouncyCastleProvider());
+
         byte[] serverPublicKeyBytes = Base64.getDecoder().decode(publicKeyEncoded);
         X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(serverPublicKeyBytes);
         KeyFactory keyFactory = KeyFactory.getInstance("EC");
@@ -101,6 +106,26 @@ public class EncryptionHandler {
         // Encode to base64
         String encryptedMessageBase64 = Base64.getEncoder().encodeToString(encryptedMessage);
         return encryptedMessageBase64;
+    }
+
+    public static String decryptECDH(String privateKeyEncoded , String encryptedMessageBase64) throws Exception {
+        Security.addProvider(new BouncyCastleProvider());
+
+        byte[] privateKeyBytes = Base64.getDecoder().decode(privateKeyEncoded);
+        PKCS8EncodedKeySpec pkcs8KeySpec = new PKCS8EncodedKeySpec(privateKeyBytes);
+        KeyFactory keyFactory = KeyFactory.getInstance("EC");
+        PrivateKey clientPrivateKey = keyFactory.generatePrivate(pkcs8KeySpec);
+
+        //byte[] serverPrivateKeyBytes = Base64.getDecoder().decode(privateKeyEncoded);
+        //X509EncodedKeySpec x509KeySpec = new X509EncodedKeySpec(serverPrivateKeyBytes);
+        //KeyFactory keyFactory = KeyFactory.getInstance("EC");
+        //PrivateKey clientPrivateKey = keyFactory.generatePrivate(x509KeySpec);
+
+        byte[] encryptedMessage = Base64.getDecoder().decode(encryptedMessageBase64);
+        Cipher cipher = Cipher.getInstance("ECIES");
+        cipher.init(Cipher.DECRYPT_MODE, clientPrivateKey);
+        byte[] decryptedBytes = cipher.doFinal(encryptedMessage);
+        return new String(decryptedBytes);
     }
 
     public static KeyPair generateECDHKeyPair() {

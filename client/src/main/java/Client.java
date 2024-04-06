@@ -4,6 +4,7 @@ import java.net.Socket;
 import java.security.KeyPair;
 import java.security.Security;
 import java.util.Base64;
+import java.util.HashMap;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -39,7 +40,14 @@ public class Client {
     public static String chatUserName;
     private static final Logger logger = LogManager.getLogger(Client.class);
 
+    public static HashMap<String, String> userPrivateKeyList;
+
     public static void main(String[] args){
+
+        userPrivateKeyList = new HashMap<>();
+        userPrivateKeyList.put("alice" , "MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCBhdKqaVFmgHvyPcX9L+tM5clYmppFvK8MEDWS0R7agqQ==");
+        userPrivateKeyList.put("bob" , "MEECAQAwEwYHKoZIzj0CAQYIKoZIzj0DAQcEJzAlAgEBBCBRU3maSi+OhGkgLwNnbecco/O0LLwLV+D1C+2h12NnAA==");
+
         userInput = new BufferedReader(new InputStreamReader(System.in));
         clientConnectionState = ClientConnectionState.UNSECURE;
 

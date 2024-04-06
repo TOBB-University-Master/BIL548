@@ -27,10 +27,7 @@ public class ClientHandler implements Runnable {
     private EncryptionHandler encryptionHandler;
     private static final Logger logger = LogManager.getLogger(ClientHandler.class);
 
-    private static final Marker VERSION_1 = MarkerManager.getMarker("VERSION 1");
     private static final Marker CLIENT_REQUEST = MarkerManager.getMarker("CLIENT REQUEST");
-    private static final Marker ENCRYPTED_TEXT = MarkerManager.getMarker("ENCRYPTED TEXT");
-    private static final Marker PLAIN_TEXT = MarkerManager.getMarker("PLAIN TEXT");
     private static final Marker CLIENT_RESPONSE = MarkerManager.getMarker("CLIENT RESPONSE");
 
     public ClientHandler(Socket clientSocket) {
@@ -216,7 +213,7 @@ public class ClientHandler implements Runnable {
                                 tgtJsonData.put("user", userInDB.getUsername());
                                 tgtJsonData.put("session", session);
                                 tgtJsonData.put("timestamp", timestamp.toString());
-                                SecretKey privateKey = encryptionHandler.getAESKey("SERVER_PRIVATE_KEY");
+                                SecretKey privateKey = encryptionHandler.getAESKey(Server.SERVER_PRIVATE_KEY);
                                 String __TGT__ = EncryptionHandler.encryptAES(privateKey, tgtJsonData.toString());
 
                                 JSONObject encJsonData = new JSONObject();
@@ -226,8 +223,12 @@ public class ClientHandler implements Runnable {
                                 encJsonData.put("timestamp", timestamp.toString());
                                 logger.info(MarkerManager.getMarker("LOGIN PLAIN TEXT"), encJsonData.toString());
 
-                                SecretKey secretKey = encryptionHandler.getAESKey(userInDB.getPassword());
-                                String encryptedText = EncryptionHandler.encryptAES(secretKey, encJsonData.toString());
+                                //TODO: AES yerine public key kullanılacak
+                                //SecretKey secretKey = encryptionHandler.getAESKey(userInDB.getPassword());
+                                //String encryptedText = EncryptionHandler.encryptAES(secretKey, encJsonData.toString());
+
+                                String encryptedText = EncryptionHandler.encryptECDH(userInDB.getPassword(), encJsonData.toString());
+
                                 logger.info(MarkerManager.getMarker("LOGIN ENC TEXT"), encryptedText);
                                 response = encryptedText;
                             }
